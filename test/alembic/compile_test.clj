@@ -2,7 +2,9 @@
 (ns alembic.compile-test
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
-            [alembic.compile :refer [check-faust! faust-source validate compile-to-cpp]]
+            [clojure.java.io :as io]
+            [alembic.compile :refer [check-faust! faust-source validate
+                                     compile-to-cpp compile-to-clap]]
             [alembic.patch :refer [defpatch!]]))
 
 ;; ---------------------------------------------------------------------------
@@ -102,3 +104,36 @@
                     :rate    :sample}]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Faust compilation failed"
             (compile-to-cpp bad-graph))))))
+
+;; ---------------------------------------------------------------------------
+;; compile-to-clap — gated on cpp build being configured
+;;
+;; These tests are skipped when the cmake build directory does not exist,
+;; keeping `lein test` fast. Run `cmake -S cpp -B cpp/build` once to enable.
+;; ---------------------------------------------------------------------------
+
+(defn- cpp-build-ready? []
+  (.exists (io/file (System/getProperty "user.dir") "cpp" "build" "CMakeCache.txt")))
+
+(deftest compile-to-clap-simple-test
+  (when (cpp-build-ready?)
+    (let [clap-path (compile-to-clap simple-patch :name "alembic-test-phasor")]
+      (testing "returns a string path"
+        (is (string? clap-path)))
+      (testing "path ends with .clap"
+        (is (str/ends-with? clap-path ".clap")))
+      (testing ".clap bundle exists on disk"
+        (is (.exists (io/file clap-path))))
+      (testing "macOS bundle has Contents/MacOS structure"
+        (is (.exists (io/file clap-path "Contents" "MacOS" "alembic-test-phasor")))))))
+
+(deftest compile-to-clap-with-params-test
+  (when (cpp-build-ready?)
+    (let [clap-path (compile-to-clap fm-patch
+                                     :name    "alembic-test-fm"
+                                     :vendor  "cljseq-test"
+                                     :version "0.1.0")]
+      (testing "FM patch with params compiles to .clap"
+        (is (.exists (io/file clap-path))))
+      (testing "bundle structure is correct"
+        (is (.exists (io/file clap-path "Contents" "MacOS" "alembic-test-fm")))))))
