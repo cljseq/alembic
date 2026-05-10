@@ -56,11 +56,11 @@
   (name id))
 
 (defn- fmt-num
-  "Format a number as a Faust float literal."
+  "Format a number as a Faust float literal.
+  Uses BigDecimal plain-string form to avoid scientific notation (e.g. 1.0E-4),
+  which Faust does not accept."
   [x]
-  (let [d (double x)
-        s (str d)]
-    ;; Ensure there is always a decimal point so Faust treats it as float.
+  (let [s (-> (BigDecimal/valueOf (double x)) .stripTrailingZeros .toPlainString)]
     (if (str/includes? s ".") s (str s ".0"))))
 
 ;; ---------------------------------------------------------------------------
